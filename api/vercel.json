@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "api/imagelogger.py": {
+      "runtime": "python3.12",
+      "maxDuration": 10  // Short timeout for quick redirects
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",  // Catch all paths (/, /?url=..., etc.)
+      "destination": "/api/imagelogger"
+    }
+  ]
+}
